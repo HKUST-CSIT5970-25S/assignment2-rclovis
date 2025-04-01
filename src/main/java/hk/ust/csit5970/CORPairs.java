@@ -1,10 +1,20 @@
 package hk.ust.csit5970;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
 import org.apache.commons.cli.*;
 import org.apache.commons.cli.Options;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.*;
 import org.apache.hadoop.io.FloatWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
@@ -19,260 +29,408 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.log4j.Logger;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.*;
-
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.util.*;
-import java.util.Arrays;
-import java.util.HashMap;
-
 /**
  * Compute the bigram count using "pairs" approach
  */
 public class CORPairs extends Configured implements Tool {
-	private static final Logger LOG = Logger.getLogger(CORPairs.class);
 
-	/*
-	 * TODO: Write your first-pass Mapper here.
-	 */
-	private static class CORMapper1 extends
-			Mapper<LongWritable, Text, Text, IntWritable> {
-		@Override
-		public void map(LongWritable key, Text value, Context context)
-				throws IOException, InterruptedException {
-			HashMap<String, Integer> word_set = new HashMap<String, Integer>();
-			// Please use this tokenizer! DO NOT implement a tokenizer by yourself!
-			String clean_doc = value.toString().replaceAll("[^a-z A-Z]", " ");
-			StringTokenizer doc_tokenizer = new StringTokenizer(clean_doc);
-			/*
-			 * TODO: Your implementation goes here.
-			 */
-		}
-	}
+    private static final Logger LOG = Logger.getLogger(CORPairs.class);
 
-	/*
-	 * TODO: Write your first-pass reducer here.
-	 */
-	private static class CORReducer1 extends
-			Reducer<Text, IntWritable, Text, IntWritable> {
-		@Override
-		public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-			/*
-			 * TODO: Your implementation goes here.
-			 */
-		}
-	}
+    /*
+     * TODO: Write your first-pass Mapper here.
+     */
+    private static class CORMapper1
+        extends Mapper<LongWritable, Text, Text, IntWritable> {
 
+        @Override
+        public void map(LongWritable key, Text value, Context context)
+            throws IOException, InterruptedException {
+            HashMap<String, Integer> word_set = new HashMap<String, Integer>();
+            // Please use this tokenizer! DO NOT implement a tokenizer by yourself!
+            String clean_doc = value.toString().replaceAll("[^a-z A-Z]", " ");
+            StringTokenizer doc_tokenizer = new StringTokenizer(clean_doc);
+            /*
+             * TODO: Your implementation goes here.
+             */
+            while (doc_tokenizer.hasMoreTokens()) {
+                String word = doc_tokenizer.nextToken();
+                if (!word_set.containsKey(word)) {
+                    word_set.put(word, 1);
+                } else {
+                    word_set.put(word, word_set.get(word) + 1);
+                }
+            }
+            for (String word : word_set.keySet()) {
+                context.write(
+                    new Text(word),
+                    new IntWritable(word_set.get(word))
+                );
+            }
+        }
+    }
 
-	/*
-	 * TODO: Write your second-pass Mapper here.
-	 */
-	public static class CORPairsMapper2 extends Mapper<LongWritable, Text, PairOfStrings, IntWritable> {
-		@Override
-		protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-			// Please use this tokenizer! DO NOT implement a tokenizer by yourself!
-			StringTokenizer doc_tokenizer = new StringTokenizer(value.toString().replaceAll("[^a-z A-Z]", " "));
-			/*
-			 * TODO: Your implementation goes here.
-			 */
-		}
-	}
+    /*
+     * TODO: Write your first-pass reducer here.
+     */
+    private static class CORReducer1
+        extends Reducer<Text, IntWritable, Text, IntWritable> {
 
-	/*
-	 * TODO: Write your second-pass Combiner here.
-	 */
-	private static class CORPairsCombiner2 extends Reducer<PairOfStrings, IntWritable, PairOfStrings, IntWritable> {
-		@Override
-		protected void reduce(PairOfStrings key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-			/*
-			 * TODO: Your implementation goes here.
-			 */
-		}
-	}
+        private static final IntWritable COUNT = new IntWritable();
 
-	/*
-	 * TODO: Write your second-pass Reducer here.
-	 */
-	public static class CORPairsReducer2 extends Reducer<PairOfStrings, IntWritable, PairOfStrings, DoubleWritable> {
-		private final static Map<String, Integer> word_total_map = new HashMap<String, Integer>();
+        @Override
+        public void reduce(
+            Text key,
+            Iterable<IntWritable> values,
+            Context context
+        ) throws IOException, InterruptedException {
+            /*
+             * TODO: Your implementation goes here.
+             */
 
-		/*
-		 * Preload the middle result file.
-		 * In the middle result file, each line contains a word and its frequency Freq(A), seperated by "\t"
-		 */
-		@Override
-		protected void setup(Context context) throws IOException, InterruptedException {
-			Path middle_result_path = new Path("mid/part-r-00000");
-			Configuration middle_conf = new Configuration();
-			try {
-				FileSystem fs = FileSystem.get(URI.create(middle_result_path.toString()), middle_conf);
+            int sum = 0;
+            for (IntWritable value : values) {
+                sum += value.get();
+            }
+            COUNT.set(sum);
+            context.write(key, COUNT);
+        }
+    }
 
-				if (!fs.exists(middle_result_path)) {
-					throw new IOException(middle_result_path.toString() + "not exist!");
-				}
+    /*
+     * TODO: Write your second-pass Mapper here.
+     */
+    public static class CORPairsMapper2
+        extends Mapper<LongWritable, Text, PairOfStrings, IntWritable> {
 
-				FSDataInputStream in = fs.open(middle_result_path);
-				InputStreamReader inStream = new InputStreamReader(in);
-				BufferedReader reader = new BufferedReader(inStream);
+        private static final IntWritable ONE = new IntWritable(1);
 
-				LOG.info("reading...");
-				String line = reader.readLine();
-				String[] line_terms;
-				while (line != null) {
-					line_terms = line.split("\t");
-					word_total_map.put(line_terms[0], Integer.valueOf(line_terms[1]));
-					LOG.info("read one line!");
-					line = reader.readLine();
-				}
-				reader.close();
-				LOG.info("finished！");
-			} catch (Exception e) {
-				System.out.println(e.getMessage());
-			}
-		}
+        @Override
+        protected void map(LongWritable key, Text value, Context context)
+            throws IOException, InterruptedException {
+            // Please use this tokenizer! DO NOT implement a tokenizer by yourself!
+            StringTokenizer doc_tokenizer = new StringTokenizer(
+                value.toString().replaceAll("[^a-z A-Z]", " ")
+            );
+            /*
+             * TODO: Your implementation goes here.
+             */
+            HashMap<String, Integer> word_set = new HashMap<String, Integer>();
+            while (doc_tokenizer.hasMoreTokens()) {
+                String word = doc_tokenizer.nextToken();
+                if (!word_set.containsKey(word)) {
+                    word_set.put(word, 1);
+                }
+            }
 
-		/*
-		 * TODO: write your second-pass Reducer here.
-		 */
-		@Override
-		protected void reduce(PairOfStrings key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-			/*
-			 * TODO: Your implementation goes here.
-			 */
-		}
-	}
+            // sort words
+            List<String> sorted_words = new ArrayList<String>(
+                word_set.keySet()
+            );
+            Collections.sort(sorted_words);
 
-	private static final class MyPartitioner extends Partitioner<PairOfStrings, FloatWritable> {
-		@Override
-		public int getPartition(PairOfStrings key, FloatWritable value, int numReduceTasks) {
-			return (key.getLeftElement().hashCode() & Integer.MAX_VALUE) % numReduceTasks;
-		}
-	}
+            for (int i = 0; i < sorted_words.size(); i++) {
+                String word = sorted_words.get(i);
+                for (int j = i + 1; j < sorted_words.size(); j++) {
+                    String word2 = sorted_words.get(j);
+                    if (!word.equals(word2)) {
+                        context.write(new PairOfStrings(word, word2), ONE);
+                    }
+                }
+            }
+        }
+    }
 
-	/**
-	 * Creates an instance of this tool.
-	 */
-	public CORPairs() {
-	}
+    /*
+     * TODO: Write your second-pass Combiner here.
+     */
+    private static class CORPairsCombiner2
+        extends Reducer<
+            PairOfStrings,
+            IntWritable,
+            PairOfStrings,
+            IntWritable
+        > {
 
-	private static final String INPUT = "input";
-	private static final String MIDDLE = "middle";
-	private static final String OUTPUT = "output";
-	private static final String NUM_REDUCERS = "numReducers";
+        private static final IntWritable COUNT = new IntWritable();
 
-	/**
-	 * Runs this tool.
-	 */
-	@SuppressWarnings({ "static-access" })
-	public int run(String[] args) throws Exception {
-		Options options = new Options();
+        @Override
+        protected void reduce(
+            PairOfStrings key,
+            Iterable<IntWritable> values,
+            Context context
+        ) throws IOException, InterruptedException {
+            /*
+             * TODO: Your implementation goes here.
+             */
 
-		options.addOption(OptionBuilder.withArgName("path").hasArg()
-				.withDescription("input path").create(INPUT));
-		options.addOption(OptionBuilder.withArgName("path").hasArg()
-				.withDescription("output path").create(OUTPUT));
-		options.addOption(OptionBuilder.withArgName("num").hasArg()
-				.withDescription("number of reducers").create(NUM_REDUCERS));
+            int sum = 0;
+            for (IntWritable value : values) {
+                sum += value.get();
+            }
+            COUNT.set(sum);
+            context.write(key, COUNT);
+        }
+    }
 
-		CommandLine cmdline;
-		CommandLineParser parser = new GnuParser();
+    /*
+     * TODO: Write your second-pass Reducer here.
+     */
+    public static class CORPairsReducer2
+        extends Reducer<
+            PairOfStrings,
+            IntWritable,
+            PairOfStrings,
+            DoubleWritable
+        > {
 
-		try {
-			cmdline = parser.parse(options, args);
-		} catch (ParseException exp) {
-			System.err.println("Error parsing command line: "
-					+ exp.getMessage());
-			return -1;
-		}
+        private static final Map<String, Integer> word_total_map = new HashMap<
+            String,
+            Integer
+        >();
 
-		// Lack of arguments
-		if (!cmdline.hasOption(INPUT) || !cmdline.hasOption(OUTPUT)) {
-			System.out.println("args: " + Arrays.toString(args));
-			HelpFormatter formatter = new HelpFormatter();
-			formatter.setWidth(120);
-			formatter.printHelp(this.getClass().getName(), options);
-			ToolRunner.printGenericCommandUsage(System.out);
-			return -1;
-		}
+        /*
+         * Preload the middle result file.
+         * In the middle result file, each line contains a word and its frequency Freq(A), seperated by "\t"
+         */
+        @Override
+        protected void setup(Context context)
+            throws IOException, InterruptedException {
+            Path middle_result_path = new Path("mid/part-r-00000");
+            Configuration middle_conf = new Configuration();
+            try {
+                FileSystem fs = FileSystem.get(
+                    URI.create(middle_result_path.toString()),
+                    middle_conf
+                );
 
-		String inputPath = cmdline.getOptionValue(INPUT);
-		String middlePath = "mid";
-		String outputPath = cmdline.getOptionValue(OUTPUT);
+                if (!fs.exists(middle_result_path)) {
+                    throw new IOException(
+                        middle_result_path.toString() + "not exist!"
+                    );
+                }
 
-		int reduceTasks = cmdline.hasOption(NUM_REDUCERS) ? Integer
-				.parseInt(cmdline.getOptionValue(NUM_REDUCERS)) : 1;
+                FSDataInputStream in = fs.open(middle_result_path);
+                InputStreamReader inStream = new InputStreamReader(in);
+                BufferedReader reader = new BufferedReader(inStream);
 
-		LOG.info("Tool: " + CORPairs.class.getSimpleName());
-		LOG.info(" - input path: " + inputPath);
-		LOG.info(" - output path: " + outputPath);
-		LOG.info(" - number of reducers: " + reduceTasks);
+                LOG.info("reading...");
+                String line = reader.readLine();
+                String[] line_terms;
+                while (line != null) {
+                    line_terms = line.split("\t");
+                    word_total_map.put(
+                        line_terms[0],
+                        Integer.valueOf(line_terms[1])
+                    );
+                    LOG.info("read one line!");
+                    line = reader.readLine();
+                }
+                reader.close();
+                LOG.info("finished！");
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
+            }
+        }
 
-		// Setup for the first-pass MapReduce
-		Configuration conf1 = new Configuration();
+        private static final DoubleWritable FREQ = new DoubleWritable();
 
-		Job job1 = Job.getInstance(conf1, "Firstpass");
+        /*
+         * TODO: write your second-pass Reducer here.
+         */
+        @Override
+        protected void reduce(
+            PairOfStrings key,
+            Iterable<IntWritable> values,
+            Context context
+        ) throws IOException, InterruptedException {
+            /*
+             * TODO: Your implementation goes here.
+             */
 
-		job1.setJarByClass(CORPairs.class);
-		job1.setMapperClass(CORMapper1.class);
-		job1.setReducerClass(CORReducer1.class);
-		job1.setOutputKeyClass(Text.class);
-		job1.setOutputValueClass(IntWritable.class);
+            // Read the file art-r-00000 to get the frequency of the word
+            FileSystem fs = FileSystem.get(context.getConfiguration());
+            String word1 = key.getLeftElement();
+            String word2 = key.getRightElement();
+            Path middle_result_path = new Path("mid/part-r-00000");
+            String line = "";
+            DoubleWritable freq1 = new DoubleWritable();
+            DoubleWritable freq2 = new DoubleWritable();
+            try {
+                FSDataInputStream in = fs.open(middle_result_path);
+                InputStreamReader inStream = new InputStreamReader(in);
+                BufferedReader reader = new BufferedReader(inStream);
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split("\t");
+                    if (parts[0].equals(word1)) {
+                        freq1.set(Double.parseDouble(parts[1]));
+                    } else if (parts[0].equals(word2)) {
+                        freq2.set(Double.parseDouble(parts[1]));
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
+            }
+            double sum = 0;
+            for (IntWritable value : values) {
+                sum += value.get();
+            }
+            FREQ.set((float) sum / (freq1.get() * freq2.get()));
+            context.write(key, FREQ);
+        }
+    }
 
-		FileInputFormat.setInputPaths(job1, new Path(inputPath));
-		FileOutputFormat.setOutputPath(job1, new Path(middlePath));
+    private static final class MyPartitioner
+        extends Partitioner<PairOfStrings, FloatWritable> {
 
-		// Delete the output directory if it exists already.
-		Path middleDir = new Path(middlePath);
-		FileSystem.get(conf1).delete(middleDir, true);
+        @Override
+        public int getPartition(
+            PairOfStrings key,
+            FloatWritable value,
+            int numReduceTasks
+        ) {
+            return (
+                (key.getLeftElement().hashCode() & Integer.MAX_VALUE) %
+                numReduceTasks
+            );
+        }
+    }
 
-		// Time the program
-		long startTime = System.currentTimeMillis();
-		job1.waitForCompletion(true);
-		LOG.info("Job 1 Finished in " + (System.currentTimeMillis() - startTime)
-				/ 1000.0 + " seconds");
+    /**
+     * Creates an instance of this tool.
+     */
+    public CORPairs() {}
 
-		// Setup for the second-pass MapReduce
+    private static final String INPUT = "input";
+    private static final String MIDDLE = "middle";
+    private static final String OUTPUT = "output";
+    private static final String NUM_REDUCERS = "numReducers";
 
-		// Delete the output directory if it exists already.
-		Path outputDir = new Path(outputPath);
-		FileSystem.get(conf1).delete(outputDir, true);
+    /**
+     * Runs this tool.
+     */
+    @SuppressWarnings({ "static-access" })
+    public int run(String[] args) throws Exception {
+        Options options = new Options();
 
+        options.addOption(
+            OptionBuilder.withArgName("path")
+                .hasArg()
+                .withDescription("input path")
+                .create(INPUT)
+        );
+        options.addOption(
+            OptionBuilder.withArgName("path")
+                .hasArg()
+                .withDescription("output path")
+                .create(OUTPUT)
+        );
+        options.addOption(
+            OptionBuilder.withArgName("num")
+                .hasArg()
+                .withDescription("number of reducers")
+                .create(NUM_REDUCERS)
+        );
 
-		Configuration conf2 = new Configuration();
-		Job job2 = Job.getInstance(conf2, "Secondpass");
+        CommandLine cmdline;
+        CommandLineParser parser = new GnuParser();
 
-		job2.setJarByClass(CORPairs.class);
-		job2.setMapperClass(CORPairsMapper2.class);
-		job2.setCombinerClass(CORPairsCombiner2.class);
-		job2.setReducerClass(CORPairsReducer2.class);
+        try {
+            cmdline = parser.parse(options, args);
+        } catch (ParseException exp) {
+            System.err.println(
+                "Error parsing command line: " + exp.getMessage()
+            );
+            return -1;
+        }
 
-		job2.setOutputKeyClass(PairOfStrings.class);
-		job2.setOutputValueClass(DoubleWritable.class);
-		job2.setMapOutputValueClass(IntWritable.class);
-		job2.setNumReduceTasks(reduceTasks);
+        // Lack of arguments
+        if (!cmdline.hasOption(INPUT) || !cmdline.hasOption(OUTPUT)) {
+            System.out.println("args: " + Arrays.toString(args));
+            HelpFormatter formatter = new HelpFormatter();
+            formatter.setWidth(120);
+            formatter.printHelp(this.getClass().getName(), options);
+            ToolRunner.printGenericCommandUsage(System.out);
+            return -1;
+        }
 
-		FileInputFormat.setInputPaths(job2, new Path(inputPath));
-		FileOutputFormat.setOutputPath(job2, new Path(outputPath));
+        String inputPath = cmdline.getOptionValue(INPUT);
+        String middlePath = "mid";
+        String outputPath = cmdline.getOptionValue(OUTPUT);
 
-		// Time the program
-		startTime = System.currentTimeMillis();
-		job2.waitForCompletion(true);
-		LOG.info("Job 2 Finished in " + (System.currentTimeMillis() - startTime)
-				/ 1000.0 + " seconds");
+        int reduceTasks = cmdline.hasOption(NUM_REDUCERS)
+            ? Integer.parseInt(cmdline.getOptionValue(NUM_REDUCERS))
+            : 1;
 
-		return 0;
-	}
+        LOG.info("Tool: " + CORPairs.class.getSimpleName());
+        LOG.info(" - input path: " + inputPath);
+        LOG.info(" - output path: " + outputPath);
+        LOG.info(" - number of reducers: " + reduceTasks);
 
-	/**
-	 * Dispatches command-line arguments to the tool via the {@code ToolRunner}.
-	 */
-	public static void main(String[] args) throws Exception {
-		ToolRunner.run(new CORPairs(), args);
-	}
+        // Setup for the first-pass MapReduce
+        Configuration conf1 = new Configuration();
+
+        Job job1 = Job.getInstance(conf1, "Firstpass");
+
+        job1.setJarByClass(CORPairs.class);
+        job1.setMapperClass(CORMapper1.class);
+        job1.setReducerClass(CORReducer1.class);
+        job1.setOutputKeyClass(Text.class);
+        job1.setOutputValueClass(IntWritable.class);
+
+        FileInputFormat.setInputPaths(job1, new Path(inputPath));
+        FileOutputFormat.setOutputPath(job1, new Path(middlePath));
+
+        // Delete the output directory if it exists already.
+        Path middleDir = new Path(middlePath);
+        FileSystem.get(conf1).delete(middleDir, true);
+
+        // Time the program
+        long startTime = System.currentTimeMillis();
+        job1.waitForCompletion(true);
+        LOG.info(
+            "Job 1 Finished in " +
+            (System.currentTimeMillis() - startTime) / 1000.0 +
+            " seconds"
+        );
+
+        // Setup for the second-pass MapReduce
+
+        // Delete the output directory if it exists already.
+        Path outputDir = new Path(outputPath);
+        FileSystem.get(conf1).delete(outputDir, true);
+
+        Configuration conf2 = new Configuration();
+        Job job2 = Job.getInstance(conf2, "Secondpass");
+
+        job2.setJarByClass(CORPairs.class);
+        job2.setMapperClass(CORPairsMapper2.class);
+        job2.setCombinerClass(CORPairsCombiner2.class);
+        job2.setReducerClass(CORPairsReducer2.class);
+
+        job2.setOutputKeyClass(PairOfStrings.class);
+        job2.setOutputValueClass(DoubleWritable.class);
+        job2.setMapOutputValueClass(IntWritable.class);
+        job2.setNumReduceTasks(reduceTasks);
+
+        FileInputFormat.setInputPaths(job2, new Path(inputPath));
+        FileOutputFormat.setOutputPath(job2, new Path(outputPath));
+
+        // Time the program
+        startTime = System.currentTimeMillis();
+        job2.waitForCompletion(true);
+        LOG.info(
+            "Job 2 Finished in " +
+            (System.currentTimeMillis() - startTime) / 1000.0 +
+            " seconds"
+        );
+
+        return 0;
+    }
+
+    /**
+     * Dispatches command-line arguments to the tool via the {@code ToolRunner}.
+     */
+    public static void main(String[] args) throws Exception {
+        ToolRunner.run(new CORPairs(), args);
+    }
 }
