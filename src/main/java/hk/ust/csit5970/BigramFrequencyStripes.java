@@ -111,6 +111,9 @@ public class BigramFrequencyStripes extends Configured implements Tool {
 
             for (Entry<String, Integer> mapElement : SUM_STRIPES.entrySet()) {
                 if (mapElement.getKey().equals("")) {
+                    BIGRAM.set(first_w, "");
+                    COUNT.set((float) total);
+                    context.write(BIGRAM, COUNT);
                     continue;
                 }
                 String second_w = (String) mapElement.getKey();
